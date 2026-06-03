@@ -1,7 +1,7 @@
 # security-scripts
 
-## 🐍 [Security Scripts](https://github.com/jaalso/security-scripts) <sup><sub>← click to open</sub></sup>
-> Python automation for offensive and defensive security operations
+# 🐍 Python Security Scripts
+> Security-focused Python scripts for offensive and defensive operations ·  
 
 ---
 
