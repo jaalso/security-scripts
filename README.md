@@ -196,6 +196,6 @@ environments only. All work complies with Swiss law and ethical hacking standard
 
 ---
 
-## ⚖️ License
+## 📄 License
 
 MIT — see [LICENSE](./LICENSE)
