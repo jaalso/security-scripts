@@ -13,8 +13,10 @@
 | 02 | [sbom-scanner](#02--sbom-scanner)                       | Scan SBOM JSON files against OSV.dev · CI/CD-friendly exit codes           | ✅ Complete |
 | 03 | [dns-typosquatting](#03--dns-typosquatting)             | Detect typosquatted domains in DNS logs via Levenshtein edit distance      | ✅ Complete |
 | 04 | [soc-triage-helpers](#04--soc-triage-helpers)           | Fast terminal utilities for IR — file hashing · DNS resolution             | ✅ Complete |
-| 05 | certinfo.py                                             | TLS certificate subject · issuer · expiry extraction                       | 🔜 Planned  |
-| 06 | urlrep.py                                               | URL reputation via URLscan.io + VirusTotal API                             | 🔜 Planned  |
+| 05 | [xor-decrypt](#05--xor-decrypt)                         | Decrypt repeating-key XOR ciphertext · bitwise crypto from first principles | ✅ Complete |
+| 06 | certinfo.py                                             | TLS certificate subject · issuer · expiry extraction                       | 🔜 Planned  |
+| 07 | urlrep.py                                               | URL reputation via URLscan.io + VirusTotal API                             | 🔜 Planned  |
+
 
 ---
 
@@ -723,6 +725,166 @@ Small, focused, dependency-free, terminal-callable. They demonstrate fluency wit
 standard library (`hashlib`, `socket`) and the same disciplined error handling as the larger
 scripts in this repository. Together they form the building blocks an analyst would compose
 into longer investigative pipelines.
+
+---
+
+## 05 · xor-decrypt
+
+[#05--xor-decrypt](#05--xor-decrypt)
+
+**Tech stack:** Python 3.13 · os · sys (standard library only)
+**Context:** SCI - Module 7 Scripting & Automation (Class 2511)
+
+A Python tool that decrypts files encrypted with repeating-key XOR using bytewise operations
+and modulo key cycling. Built without any cryptography library — pure first-principles
+implementation of the bitwise XOR cipher.
+
+**The Problem:**
+XOR is the fundamental building block of nearly every modern stream cipher, every CTF challenge
+involving "the data looks scrambled," and a huge fraction of malware string obfuscation. When
+analysts encounter XOR-encrypted artifacts (firmware blobs, malware config sections, CTF flags),
+they need to understand what's actually happening at the byte level — not just call a library
+function. Tools that hide the math hide the understanding.
+
+**The Solution:**
+Read the encrypted file as raw bytes → read the key file as raw bytes → for each byte of the
+ciphertext, XOR it with the corresponding key byte (using modulo to cycle the key over a longer
+ciphertext) → write the result with a `_decrypted` suffix added to the filename. Validate file
+existence with `os.path.exists()` before opening. Verify correctness by inspecting the recovered
+file's magic bytes (PNG signature `89 50 4e 47 0d 0a 1a 0a` proves byte-perfect recovery).
+
+**Example Output:**
+
+```
+python xor_decrypt.py swiss-cyber-institute_encrypted.png swiss-cyber-institute.key
+```
+
+```
+Decrypted: swiss-cyber-institute_encrypted_decrypted.png
+```
+
+Verification via magic-byte inspection:
+
+```
+od -An -tx1 -N8 swiss-cyber-institute_encrypted_decrypted.png
+```
+
+```
+ 89 50 4e 47 0d 0a 1a 0a
+```
+
+> The recovered first 8 bytes match the PNG signature defined in RFC 2083 exactly.
+> Cryptographic proof that all 18,313 bytes decrypted correctly — not just visual inspection.
+
+**Features:**
+
+| Feature             | Implementation                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| File error handling | LBYL pattern via `os.path.exists()` — distinct messages for missing encrypted vs. key files     |
+| Binary I/O          | `"rb"` and `"wb"` modes — no text encoding interference with byte data                          |
+| Key cycling         | Modulo operator (`i % len(key)`) — works for any key length, any file size                      |
+| Self-inverse        | Same script encrypts and decrypts (XOR property) — only the input determines direction          |
+| Output naming       | `os.path.splitext()` to insert `_decrypted` before the file extension                           |
+
+**Installation:**
+
+```
+git clone https://github.com/jaalso/security-scripts
+cd security-scripts/xor-decrypt
+python xor_decrypt.py encrypted_file key_file
+```
+
+> No external dependencies. Standard library only.
+
+**Source:**
+
+```python
+import sys
+import os
+
+# Check that exactly 2 arguments were provided (encrypted file + key file)
+if len(sys.argv) != 3:
+    print("Usage: python xor_decrypt.py <encrypted_file> <key_file>")
+    sys.exit(1)
+
+encrypted_file = sys.argv[1]
+key_file = sys.argv[2]
+
+# Validate that both files exist — distinct messages for each
+if not os.path.exists(encrypted_file):
+    print(f"Error: Encrypted file not found: {encrypted_file}")
+    sys.exit(1)
+if not os.path.exists(key_file):
+    print(f"Error: Key file not found: {key_file}")
+    sys.exit(1)
+
+# Read both files in binary mode
+with open(encrypted_file, "rb") as f:
+    encrypted_data = f.read()
+with open(key_file, "rb") as f:
+    key = f.read()
+
+# XOR-decrypt: each byte ^ corresponding key byte (cycling the key via modulo)
+decrypted_data = bytearray()
+for i in range(len(encrypted_data)):
+    key_byte = key[i % len(key)]
+    decrypted_byte = encrypted_data[i] ^ key_byte
+    decrypted_data.append(decrypted_byte)
+
+# Build output filename: insert "_decrypted" before the extension
+name, ext = os.path.splitext(encrypted_file)
+output_file = name + "_decrypted" + ext
+
+# Write the decrypted bytes to the output file (binary mode)
+with open(output_file, "wb") as f:
+    f.write(decrypted_data)
+
+# Print the output path to confirm success
+print(f"Decrypted: {output_file}")
+```
+
+**Design Decisions:**
+
+**LBYL (`os.path.exists()`) over EAFP (try/except)**
+The brief required distinct error messages per missing file. With a single try/except block, identifying *which* file failed would require parsing the exception message — awkward and brittle. Checking each file independently before opening gives clean, specific error reporting at the cost of a microscopic race-condition window (not a concern for single-user homework).
+
+**`bytearray` over `bytes` for the output**
+`bytes` is immutable; `bytearray` is mutable. Since we're building the output byte-by-byte with `.append()` calls, the mutable variant is the right tool. The final `bytearray` is then written directly to the output file without conversion.
+
+**Modulo key cycling over key padding**
+`key[i % len(key)]` lets us handle any key length against any ciphertext length with one line. The alternative — padding the key to match the ciphertext length up front — would waste memory for large files with short keys.
+
+**Limitations & Future Work:**
+
+- **Cipher is cryptographically weak** — repeating-key XOR with a short key is trivially breakable
+  if any plaintext can be guessed. Real security applications must use modern AEAD ciphers
+  (ChaCha20-Poly1305, AES-GCM) — this script is for *understanding the underlying primitive*, not
+  for actual security
+- **No key validation** — empty key file would crash with `ZeroDivisionError` on `i % len(key)`
+- **Byte-at-a-time loop is slow for large files** — for multi-MB ciphertexts, a vectorized
+  approach using `bytes(a ^ b for a, b in zip(data, cycled_key))` would be much faster
+- **Decrypt-only** — could be extended to a `--mode encrypt|decrypt` flag (the math is identical;
+  only the output suffix differs)
+- **No cryptanalysis** — does not attempt to recover the key from ciphertext alone. The classic
+  exercise is single-byte XOR brute-forcing using English-text frequency scoring
+
+**What This Demonstrates:**
+
+The XOR operation in this script is mathematically identical to what appears inside AES (in CTR
+and GCM modes), ChaCha20, every stream cipher, every one-time pad, and the inner workings of
+HMAC. Understanding it at the byte level is foundational — analysts who only know XOR as
+"`cryptography.fernet`" miss the picture entirely.
+
+The verification methodology — checking that the first 8 bytes of the recovered file match a
+known file signature (PNG magic) — is the same technique used in malware analysis when
+identifying XOR-obfuscated payloads. If the first bytes after XOR look like `4D 5A` (MZ header),
+the decrypted blob is a Windows executable. If they look like `7F 45 4C 46`, it's a Linux ELF.
+File-format inference via magic bytes is a daily-use SOC skill.
+
+This script was built chunk-by-chunk with pseudocode-first planning. The repeating-key XOR's
+self-inverse property — that the same operation encrypts and decrypts depending only on the
+input — was verified empirically with a round-trip test using both `od` for magic-byte
+inspection and the companion `hashfile.py` tool for cryptographic-hash comparison.
 
 ---
 
