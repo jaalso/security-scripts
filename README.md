@@ -893,10 +893,9 @@ inspection and the companion `hashfile.py` tool for cryptographic-hash compariso
 | Category | Tools |
 |---|---|
 | Language | Python 3.13 |
-| Libraries | requests · json · hashlib · socket · csv · sys · time · Levenshtein |
+| Libraries | requests · json · hashlib · socket · csv · sys · time · os · Levenshtein |
 | APIs | ip-api.com REST API · OSV.dev REST API |
 | Platform | Kali Linux · Windows 10 · VS Code |
-
 ---
 
 ## ⚖️ Legal & Ethical Notice
