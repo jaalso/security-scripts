@@ -731,8 +731,8 @@ into longer investigative pipelines.
 | Category | Tools |
 |---|---|
 | Language | Python 3.13 |
-| Libraries | requests · csv · sys · time |
-| APIs | ip-api.com REST API |
+| Libraries | requests · json · hashlib · socket · csv · sys · time · Levenshtein |
+| APIs | ip-api.com REST API · OSV.dev REST API |
 | Platform | Kali Linux · Windows 10 · VS Code |
 
 ---
