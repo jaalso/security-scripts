@@ -1,6 +1,6 @@
 # security-scripts
 
-# 🐍 Python Security Scripts
+🐍 Python Security Scripts
 > Security-focused Python scripts for offensive and defensive operations ·  
 
 ---
